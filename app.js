@@ -3,49 +3,49 @@ const path = require('path');
 
 const app = express();
 
-// ✅ Railway / n8n용 포트 처리
+// ✅ Railway / n8n용 포트
 const PORT = process.env.PORT || 3000;
 
-// ✅ JSON body 받기
+// ✅ JSON body 파싱 (핵심)
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// ✅ 모든 요청 로그 (진단용 핵심)
+app.use((req, res, next) => {
+  console.log('➡️ INCOMING REQUEST');
+  console.log('METHOD:', req.method);
+  console.log('PATH:', req.path);
+  next();
+});
 
 // ============================
-// 1️⃣ 테스트용 헬스 체크
+// 1️⃣ 헬스 체크
 // ============================
 app.get('/health', (req, res) => {
+  console.log('✅ HEALTH CHECK HIT');
   res.json({ status: 'ok', service: 'short-render-engine' });
 });
 
 // ============================
-// 2️⃣ n8n → 숏폼 렌더 트리거 엔드포인트
+// 2️⃣ n8n → 숏폼 렌더 트리거
 // ============================
 app.post('/render/short', async (req, res) => {
-  try {
-    const payload = req.body;
+  console.log('🔥 /render/short ENDPOINT HIT');
+  console.log('HEADERS:', req.headers);
+  console.log('BODY:', JSON.stringify(req.body, null, 2));
 
-    console.log('📩 SHORT RENDER REQUEST RECEIVED');
-    console.log(JSON.stringify(payload, null, 2));
-
-    // 👉 지금은 렌더링 안 함 (다음 단계)
-    // 👉 일단 "받았다"만 응답
-    return res.json({
-      success: true,
-      message: 'Short render job received',
-      receivedAt: new Date().toISOString(),
-    });
-  } catch (err) {
-    console.error('❌ ERROR:', err);
-    return res.status(500).json({
-      success: false,
-      error: err.message,
-    });
-  }
+  return res.json({
+    success: true,
+    message: 'Short render job received',
+    receivedAt: new Date().toISOString(),
+  });
 });
 
 // ============================
-// 3️⃣ 기본 페이지 (브라우저 접속용)
+// 3️⃣ 루트 페이지
 // ============================
 app.get('/', (req, res) => {
+  console.log('🏠 ROOT HIT');
   res.send('<h1>Short Render Engine is running</h1>');
 });
 

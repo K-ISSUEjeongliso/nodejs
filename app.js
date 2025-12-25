@@ -1,34 +1,64 @@
 const express = require('express');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// JSON 파싱
-app.use(express.json());
+// ============================
+// PostgreSQL 연결
+// ============================
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
 
-// 로그
+// ============================
+// 미들웨어
+// ============================
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.use((req, res, next) => {
-  console.log('➡️', req.method, req.path);
+  console.log('➡️ INCOMING REQUEST');
+  console.log('METHOD:', req.method);
+  console.log('PATH:', req.path);
   next();
 });
 
-// 헬스체크
+// ============================
+// 헬스 체크
+// ============================
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'short-render-engine' });
 });
 
-// 테스트용 렌더 엔드포인트 (DB 없음)
-app.post('/render/short', (req, res) => {
-  console.log('RENDER REQUEST BODY:', req.body);
+// ============================
+// 렌더 요청 저장
+// ============================
+app.post('/render/short', async (req, res) => {
+  try {
+    const { title = 'untitled' } = req.body;
 
-  res.json({
-    success: true,
-    message: 'Short render job received',
-    receivedAt: new Date().toISOString()
-  });
+    const result = await pool.query(
+      `INSERT INTO render_jobs (title, status)
+       VALUES ($1, 'pending')
+       RETURNING *`,
+      [title]
+    );
+
+    res.json({
+      success: true,
+      job: result.rows[0],
+    });
+  } catch (err) {
+    console.error('DB ERROR:', err);
+    res.status(500).json({ error: 'DB insert failed' });
+  }
 });
 
+// ============================
 // 서버 시작
+// ============================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });

@@ -1,16 +1,23 @@
 const express = require('express');
-const path = require('path');
+const { Pool } = require('pg');
 
 const app = express();
-
-// ✅ Railway / n8n용 포트
 const PORT = process.env.PORT || 3000;
 
-// ✅ JSON body 파싱 (핵심)
+// ============================
+// PostgreSQL 연결
+// ============================
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+});
+
+// ============================
+// 미들웨어
+// ============================
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// ✅ 모든 요청 로그 (진단용 핵심)
 app.use((req, res, next) => {
   console.log('➡️ INCOMING REQUEST');
   console.log('METHOD:', req.method);
@@ -22,19 +29,17 @@ app.use((req, res, next) => {
 // 1️⃣ 헬스 체크
 // ============================
 app.get('/health', (req, res) => {
-  console.log('✅ HEALTH CHECK HIT');
   res.json({ status: 'ok', service: 'short-render-engine' });
 });
 
 // ============================
-// 2️⃣ n8n → 숏폼 렌더 트리거
+// 2️⃣ 렌더 요청 수신 (n8n → 서버)
 // ============================
 app.post('/render/short', async (req, res) => {
-  console.log('🔥 /render/short ENDPOINT HIT');
-  console.log('HEADERS:', req.headers);
-  console.log('BODY:', JSON.stringify(req.body, null, 2));
+  console.log('🔥 RENDER REQUEST RECEIVED');
+  console.log(req.body);
 
-  return res.json({
+  res.json({
     success: true,
     message: 'Short render job received',
     receivedAt: new Date().toISOString(),
@@ -42,15 +47,51 @@ app.post('/render/short', async (req, res) => {
 });
 
 // ============================
-// 3️⃣ 루트 페이지
+// 3️⃣ 대기중인 작업 1건 조회 (worker용)
 // ============================
-app.get('/', (req, res) => {
-  console.log('🏠 ROOT HIT');
-  res.send('<h1>Short Render Engine is running</h1>');
+app.get('/jobs/next', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT *
+      FROM render_jobs
+      WHERE status = 'PENDING'
+      ORDER BY created_at ASC
+      LIMIT 1
+    `);
+
+    if (rows.length === 0) {
+      return res.json({ message: 'No pending jobs' });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('❌ JOB FETCH ERROR:', err);
+    res.status(500).json({ error: 'DB error' });
+  }
 });
 
 // ============================
-// 4️⃣ 서버 시작
+// 4️⃣ 상태 업데이트 (작업 완료/실패)
+// ============================
+app.post('/jobs/:id/status', async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  try {
+    await pool.query(
+      `UPDATE render_jobs SET status = $1 WHERE id = $2`,
+      [status, id]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('❌ UPDATE ERROR:', err);
+    res.status(500).json({ error: 'update failed' });
+  }
+});
+
+// ============================
+// 서버 시작
 // ============================
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);

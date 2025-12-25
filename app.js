@@ -4,7 +4,6 @@ const { Pool } = require("pg");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// PostgreSQL 연결
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
@@ -12,48 +11,39 @@ const pool = new Pool({
 
 app.use(express.json());
 
-// 🔹 서버 시작 시 테이블 자동 생성
-(async () => {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS render_jobs (
-        id SERIAL PRIMARY KEY,
-        content_id TEXT,
-        title TEXT,
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-    console.log("✅ Table ready");
-  } catch (err) {
-    console.error("❌ DB init error:", err);
-  }
-})();
-
-// 헬스 체크
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-// 데이터 저장 API
+// ✅ 실제 존재하는 테이블 + 컬럼 사용
 app.post("/render/short", async (req, res) => {
   const { title } = req.body;
 
   try {
     const result = await pool.query(
-      "INSERT INTO render_jobs (title) VALUES ($1) RETURNING *",
-      [title]
+      `
+      INSERT INTO content_items
+        (content_id, source, article_link, title, snippet)
+      VALUES
+        ($1, $2, $3, $4, $5)
+      RETURNING *;
+      `,
+      [
+        "auto_" + Date.now(),     // content_id
+        "api",                    // source
+        "https://example.com",    // article_link
+        title || "no title",
+        "auto insert"
+      ]
     );
 
-    res.json({
-      success: true,
-      data: result.rows[0],
-    });
+    res.json({ success: true, row: result.rows[0] });
   } catch (err) {
-    console.error("DB INSERT ERROR:", err);
-    res.status(500).json({ error: "DB insert failed" });
+    console.error("DB ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log("Server running on", PORT);
 });

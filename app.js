@@ -38,3 +38,16 @@ app.post('/render/short', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
+// 모든 작업 조회 (테스트용)
+app.get('/jobs', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM render_jobs ORDER BY created_at DESC'
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'DB read failed' });
+  }
+});

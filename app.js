@@ -14,7 +14,6 @@ const pool = new Pool({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 로그
 app.use((req, res, next) => {
   console.log('➡️', req.method, req.path);
   next();
@@ -28,6 +27,7 @@ app.get('/health', (req, res) => {
 // 렌더 요청
 app.post('/render/short', async (req, res) => {
   console.log('RENDER REQUEST:', req.body);
+
   res.json({
     success: true,
     message: 'Short render job received',
@@ -35,7 +35,6 @@ app.post('/render/short', async (req, res) => {
   });
 });
 
-// 서버 실행
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });

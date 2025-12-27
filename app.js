@@ -15,52 +15,28 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-/**
- * ✅ 안정적인 렌더 엔드포인트
- * - content_id가 있으면 UPDATE
- * - 없으면 INSERT
- * - n8n 재시도 / 중복 호출 안전
- */
 app.post("/render/short", async (req, res) => {
-  const {
-    content_id,
-    title = null,
-    snippet = null,
-    article_link = null,
-  } = req.body;
-
-  if (!content_id) {
-    return res.status(400).json({ error: "content_id is required" });
-  }
+  const { title } = req.body;
 
   try {
     const result = await pool.query(
       `
-      INSERT INTO content_items (
-        content_id,
-        title,
-        snippet,
-        article_link,
-        status,
-        updated_at
-      )
-      VALUES ($1, $2, $3, $4, 'PROCESSING', NOW())
-      ON CONFLICT (content_id)
-      DO UPDATE SET
-        title = EXCLUDED.title,
-        snippet = EXCLUDED.snippet,
-        article_link = EXCLUDED.article_link,
-        status = 'PROCESSING',
-        updated_at = NOW()
+      INSERT INTO content_items
+        (content_id, source, article_link, title, snippet)
+      VALUES
+        ($1, $2, $3, $4, $5)
       RETURNING *;
       `,
-      [content_id, title, snippet, article_link]
+      [
+        "auto_" + Date.now(),     
+        "api",
+        "https://example.com",
+        title || "no title",
+        "auto insert"
+      ]
     );
 
-    res.json({
-      success: true,
-      row: result.rows[0],
-    });
+    res.json({ success: true, row: result.rows[0] });
   } catch (err) {
     console.error("DB ERROR:", err);
     res.status(500).json({ error: err.message });
@@ -68,4 +44,5 @@ app.post("/render/short", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("Server ru
+  console.log("Server running on", PORT);
+});

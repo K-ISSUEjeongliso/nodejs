@@ -16,51 +16,46 @@ app.get("/health", (req, res) => {
 });
 
 /**
- * 🔥 핵심 엔드포인트
- * - content_id는 반드시 외부에서 전달받음
- * - 절대 새로 생성하지 않음
+ * ✅ 안정적인 렌더 엔드포인트
+ * - content_id가 있으면 UPDATE
+ * - 없으면 INSERT
+ * - n8n 재시도 / 중복 호출 안전
  */
 app.post("/render/short", async (req, res) => {
   const {
-    content_id,     // ⭐ 필수
-    title,
-    snippet,
-    article_link,
+    content_id,
+    title = null,
+    snippet = null,
+    article_link = null,
   } = req.body;
 
   if (!content_id) {
-    return res.status(400).json({
-      error: "content_id is required",
-    });
+    return res.status(400).json({ error: "content_id is required" });
   }
 
   try {
     const result = await pool.query(
       `
-      UPDATE content_items
-      SET
-        title = $1,
-        snippet = $2,
-        article_link = $3,
+      INSERT INTO content_items (
+        content_id,
+        title,
+        snippet,
+        article_link,
+        status,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, 'PROCESSING', NOW())
+      ON CONFLICT (content_id)
+      DO UPDATE SET
+        title = EXCLUDED.title,
+        snippet = EXCLUDED.snippet,
+        article_link = EXCLUDED.article_link,
         status = 'PROCESSING',
         updated_at = NOW()
-      WHERE content_id = $4
       RETURNING *;
       `,
-      [
-        title ?? null,
-        snippet ?? null,
-        article_link ?? null,
-        content_id,
-      ]
+      [content_id, title, snippet, article_link]
     );
-
-    if (result.rowCount === 0) {
-      return res.status(404).json({
-        error: "content_id not found",
-        content_id,
-      });
-    }
 
     res.json({
       success: true,
@@ -73,5 +68,4 @@ app.post("/render/short", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log("Server running on", PORT);
-});
+  console.log("Server ru
